@@ -27,48 +27,42 @@ except FileNotFoundError as e:
     print("Please run training.py first.")
     exit()
 
+#Helper Functions
 def clean_up_sentence(sentence):
-    sentence_words=nltk.word_tokenize(sentence)
-    sentence_words=[lemmatizer.lemmatize(word.lower()) for word in sentence_words]
+    sentence_words = nltk.word_tokenize(sentence)
+    sentence_words = [lemmatizer.lemmatize(word.lower()) for word in sentence_words]
     return sentence_words
 
 def bag_of_words(sentence):
-    sentence_words=clean_up_sentence(sentence)
-    bag=[0]*len(words)
+    sentence_words = clean_up_sentence(sentence)
+    bag = [0] * len(words)
     for w in sentence_words:
-        for i,word in enumerate(words):
-            if word==w:
-                bag[i]=1
+        for i, word in enumerate(words):
+            if word == w:
+                bag[i] = 1
     return np.array(bag)
 
 def predict_class(sentence):
-    bow=bag_of_words(sentence)
-    res=model.predict(np.array([bow]))[0]
-    ERROR_THRESHOLD=0.25
-    results=[[i, r] for i, r in enumerate(res) if r > ERROR_THRESHOLD]
-    results.sort(key=lambda x: x[1],reverse=True)
+    bow = bag_of_words(sentence)
+    res = model.predict(np.array([bow]))[0]
+    ERROR_THRESHOLD = 0.25
+    results = [[i, r] for i, r in enumerate(res) if r > ERROR_THRESHOLD]
+    results.sort(key=lambda x: x[1], reverse=True)
     
-    return_list=[]
+    return_list = []
     for r in results:
-        return_list.append({'intent':classes[r[0]], 'probability':str(r[1])})
+        return_list.append({'intent': classes[r[0]], 'probability': str(r[1])})
     
     if not return_list:
-        return_list.append({'intent':'default','probability': '1.0'})
+        return_list.append({'intent': 'default', 'probability': '1.0'})
         
     return return_list
 
-<<<<<<< HEAD
 def get_response(intents_list, intents_json):
     tag = intents_list[0]['intent']
     list_of_intents = intents_json['intents']
     result = "I'm sorry, I don't understand. Ask me anything related to mental health, stress management, motivation, or meditation."
     
-=======
-def get_response(intents_list,intents_json):
-    tag=intents_list[0]['intent']
-    list_of_intents=intents_json['intents']
-    result="I'm sorry,I don't understand,Ask me anything related to depression,stress management,motivation,meditation."#Default fallback response
->>>>>>> c9f18e0cab947dd66db607b8177fbf1da77b8068
     for i in list_of_intents:
         if i['tag'] == tag:
             result = random.choice(i['responses'])
@@ -112,7 +106,6 @@ def health_check():
         "classes_loaded": len(classes) if classes else 0
     })
 
-<<<<<<< HEAD
 #Main Execution
 if __name__ == "__main__":
     print("Starting Chatbot API server...")
@@ -122,9 +115,3 @@ if __name__ == "__main__":
     print("Server will run on http://localhost:5001")
     print("Make sure your React app is running on http://localhost:5173")
     app.run(host='0.0.0.0', port=5001, debug=True)
-=======
-
-if __name__=="__main__":
-    print("Chatbot API is running.")
-    app.run(host='0.0.0.0', port=5000)
->>>>>>> c9f18e0cab947dd66db607b8177fbf1da77b8068
