@@ -2,7 +2,8 @@ import json
 import random
 import pickle
 import numpy as np
-from flask import Flask,request,jsonify
+from flask import Flask, request, jsonify
+from flask_cors import CORS
 
 import nltk
 from nltk.stem import WordNetLemmatizer
@@ -10,7 +11,8 @@ from nltk.stem import WordNetLemmatizer
 from tensorflow.keras.models import load_model
 
 #Initialize Flask app
-app=Flask(__name__)
+app = Flask(__name__)
+CORS(app, origins=["http://localhost:5173", "http://localhost:3000", "http://127.0.0.1:5173"])  # Enable CORS for React app
 
 #Load Model,DataFiles
 try:
@@ -19,8 +21,10 @@ try:
     words = pickle.load(open('words.pkl', 'rb'))
     classes = pickle.load(open('classes.pkl', 'rb'))
     model = load_model('chatbot_model.h5')
-except FileNotFoundError:
-    print("Error: Model or data files not found. Please run training.py first.")
+    print("Chatbot model loaded successfully!")
+except FileNotFoundError as e:
+    print(f"Error: Model or data files not found. {e}")
+    print("Please run training.py first.")
     exit()
 
 #Helper Functions
@@ -55,27 +59,59 @@ def predict_class(sentence):
     return return_list
 
 def get_response(intents_list, intents_json):
-    tag=intents_list[0]['intent']
-    list_of_intents=intents_json['intents']
-    result="I'm sorry,I don't understand,Ask me anything related to depression,stress management,motivation,meditation."#Default fallback response
+    tag = intents_list[0]['intent']
+    list_of_intents = intents_json['intents']
+    result = "I'm sorry, I don't understand. Ask me anything related to mental health, stress management, motivation, or meditation."
+    
     for i in list_of_intents:
-        if i['tag']==tag:
-            result=random.choice(i['responses'])
+        if i['tag'] == tag:
+            result = random.choice(i['responses'])
             break
     return result
 
-#API Endpoint
-@app.route('/chat',methods=['POST'])
+#API Endpoints
+@app.route('/chat', methods=['POST'])
 def chat():
-    user_message=request.json.get('message')
-    if not user_message:
-        return jsonify({"error":"No message provided"}), 400
-    
-    ints=predict_class(user_message)
-    response_text=get_response(ints, intents)
-    return jsonify({"response": response_text})
+    try:
+        data = request.get_json()
+        user_message = data.get('message') if data else None
+        
+        if not user_message:
+            return jsonify({"error": "No message provided"}), 400
+        
+        print(f"Received message: {user_message}")  # Debug log
+        
+        # Get prediction
+        ints = predict_class(user_message)
+        response_text = get_response(ints, intents)
+        
+        print(f"Response: {response_text}")  # Debug log
+        
+        return jsonify({
+            "response": response_text,
+            "intent": ints[0]['intent'],
+            "confidence": ints[0]['probability']
+        })
+    except Exception as e:
+        print(f"Error in chat endpoint: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/health', methods=['GET'])
+def health_check():
+    return jsonify({
+        "status": "Chatbot API is running", 
+        "model_loaded": True,
+        "intents_loaded": len(intents['intents']) if intents else 0,
+        "words_loaded": len(words) if words else 0,
+        "classes_loaded": len(classes) if classes else 0
+    })
 
 #Main Execution
-if __name__=="__main__":
-    print("Chatbot API is running.")
-    app.run(host='0.0.0.0', port=5000)
+if __name__ == "__main__":
+    print("Starting Chatbot API server...")
+    print(f"Loaded {len(intents['intents'])} intents")
+    print(f"Loaded {len(words)} words")
+    print(f"Loaded {len(classes)} classes")
+    print("Server will run on http://localhost:5001")
+    print("Make sure your React app is running on http://localhost:5173")
+    app.run(host='0.0.0.0', port=5001, debug=True)

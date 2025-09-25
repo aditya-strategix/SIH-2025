@@ -13,6 +13,8 @@ const Chatbot = () => {
   const [inputText, setInputText] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [isConnected, setIsConnected] = useState(false);
+  const [connectionError, setConnectionError] = useState('');
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
 
@@ -26,64 +28,51 @@ const Chatbot = () => {
 
   useEffect(() => {
     inputRef.current?.focus();
+    checkChatbotConnection();
   }, []);
 
-  const predefinedResponses = {
-    greetings: [
-      "I'm here for you. What's on your mind today?",
-      "Thank you for reaching out. How can I support you?",
-      "I'm glad you're taking time to check in with yourself. What would you like to talk about?"
-    ],
-    stress: [
-      "I understand you're feeling stressed. That's completely normal. Can you tell me what's causing you the most stress right now?",
-      "Stress can be overwhelming. Have you tried any breathing exercises or meditation recently?",
-      "It sounds like you're dealing with a lot. Remember, it's okay to take breaks and ask for help."
-    ],
-    anxiety: [
-      "Anxiety can feel very intense, but you're not alone. What specific situations make you feel most anxious?",
-      "Thank you for sharing that with me. Anxiety is treatable, and there are many strategies that can help.",
-      "I hear you. When you feel anxious, try the 4-7-8 breathing technique: breathe in for 4, hold for 7, exhale for 8."
-    ],
-    depression: [
-      "I'm sorry you're feeling this way. Depression is real and valid, and seeking help shows strength.",
-      "These feelings are difficult, but they don't define you. Have you been able to talk to a counselor about this?",
-      "Thank you for trusting me with this. Remember, there are people who want to help, including professional counselors."
-    ],
-    default: [
-      "I appreciate you sharing that with me. Can you tell me more about how you're feeling?",
-      "That sounds important to you. How is this affecting your daily life?",
-      "I'm listening. What would be most helpful for you right now?",
-      "Thank you for opening up. What do you think might help you feel better?",
-      "I understand this is difficult. Have you considered speaking with a professional counselor about this?"
-    ]
-  };
-
-  const getResponseCategory = (text) => {
-    const lowerText = text.toLowerCase();
-    
-    if (lowerText.includes('hello') || lowerText.includes('hi') || lowerText.includes('hey')) {
-      return 'greetings';
+  // Check if Python chatbot API is running
+  const checkChatbotConnection = async () => {
+    try {
+      const response = await fetch('http://localhost:5001/health');
+      if (response.ok) {
+        const data = await response.json();
+        if (data.status && data.model_loaded) {
+          setIsConnected(true);
+          setConnectionError('');
+          console.log('Chatbot API connected successfully!');
+        } else {
+          setIsConnected(false);
+          setConnectionError('Chatbot model not loaded properly');
+        }
+      } else {
+        setIsConnected(false);
+        setConnectionError('Failed to connect to chatbot API');
+      }
+    } catch (error) {
+      console.log('Chatbot API not connected:', error.message);
+      setIsConnected(false);
+      setConnectionError('Cannot connect to chatbot server. Please ensure the Python chatbot is running on port 5001.');
     }
-    if (lowerText.includes('stress') || lowerText.includes('pressure') || lowerText.includes('overwhelm')) {
-      return 'stress';
-    }
-    if (lowerText.includes('anxious') || lowerText.includes('anxiety') || lowerText.includes('worry')) {
-      return 'anxiety';
-    }
-    if (lowerText.includes('depress') || lowerText.includes('sad') || lowerText.includes('hopeless')) {
-      return 'depression';
-    }
-    return 'default';
-  };
-
-  const generateBotResponse = (userMessage) => {
-    const category = getResponseCategory(userMessage);
-    const responses = predefinedResponses[category];
-    return responses[Math.floor(Math.random() * responses.length)];
   };
 
   const handleSendMessage = async () => {
     if (!inputText.trim()) return;
+
+    // Check connection before sending
+    if (!isConnected) {
+      await checkChatbotConnection();
+      if (!isConnected) {
+        const errorMessage = {
+          id: Date.now() + 1,
+          text: "I'm sorry, I can't connect to the AI chatbot right now. Please ensure the Python chatbot server is running and try again. You can also try refreshing the page.",
+          isBot: true,
+          timestamp: new Date()
+        };
+        setMessages(prev => [...prev, errorMessage]);
+        return;
+      }
+    }
 
     const userMessage = {
       id: Date.now(),
@@ -93,23 +82,69 @@ const Chatbot = () => {
     };
 
     setMessages(prev => [...prev, userMessage]);
+    const currentMessage = inputText;
     setInputText('');
     setIsTyping(true);
     setIsLoading(true);
 
-    // Simulate API call delay
-    setTimeout(() => {
-      const botResponse = {
+    try {
+      // Call Python chatbot API
+      const response = await fetch('http://localhost:5001/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          message: currentMessage
+        })
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const botResponseText = data.response || "I received your message but couldn't generate a response.";
+        
+        const botResponse = {
+          id: Date.now() + 1,
+          text: botResponseText,
+          isBot: true,
+          timestamp: new Date(),
+          intent: data.intent,
+          confidence: data.confidence
+        };
+
+        setMessages(prev => [...prev, botResponse]);
+      } else {
+        const errorData = await response.json();
+        console.error('Chatbot API error:', errorData);
+        
+        const errorResponse = {
+          id: Date.now() + 1,
+          text: "I'm having trouble processing your message right now. Could you please try rephrasing your question?",
+          isBot: true,
+          timestamp: new Date()
+        };
+        
+        setMessages(prev => [...prev, errorResponse]);
+      }
+    } catch (error) {
+      console.error('Error sending message to chatbot:', error);
+      
+      // Connection lost, update status
+      setIsConnected(false);
+      setConnectionError('Connection lost to chatbot server');
+      
+      const errorResponse = {
         id: Date.now() + 1,
-        text: generateBotResponse(inputText),
+        text: "I'm sorry, I lost connection to the chatbot server. Please check if the Python chatbot is still running and try again.",
         isBot: true,
         timestamp: new Date()
       };
-
-      setMessages(prev => [...prev, botResponse]);
+      
+      setMessages(prev => [...prev, errorResponse]);
+    } finally {
       setIsTyping(false);
       setIsLoading(false);
-    }, 1500);
+    }
   };
 
   const handleKeyPress = (e) => {
@@ -124,7 +159,10 @@ const Chatbot = () => {
     "I'm feeling anxious",
     "I need someone to talk to",
     "How can I manage my emotions?",
-    "I want to book a counselor"
+    "I want to book a counselor",
+    "What are some breathing exercises?",
+    "Help me with meditation techniques",
+    "I'm feeling overwhelmed"
   ];
 
   return (
@@ -141,13 +179,42 @@ const Chatbot = () => {
             </Link>
           </div>
           <div className="flex items-center gap-3">
+            <button 
+              onClick={checkChatbotConnection}
+              className="text-sm bg-gray-100 hover:bg-gray-200 px-3 py-1 rounded-full transition-colors"
+            >
+              Reconnect
+            </button>
             <div className="flex items-center gap-2">
-              <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
-              <span className="text-sm font-medium text-gray-700">AI Assistant Online</span>
+              <div className={`w-3 h-3 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}`}></div>
+              <span className="text-sm font-medium text-gray-700">
+                {isConnected ? 'Python AI Connected' : 'Disconnected'}
+              </span>
             </div>
           </div>
         </div>
       </header>
+
+      {/* Connection Error Banner */}
+      {!isConnected && connectionError && (
+        <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 mx-4 mt-4 rounded">
+          <div className="flex">
+            <div className="flex-shrink-0">
+              <svg className="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+              </svg>
+            </div>
+            <div className="ml-3">
+              <p className="text-sm text-yellow-700">
+                <strong>Connection Issue:</strong> {connectionError}
+              </p>
+              <p className="text-xs text-yellow-600 mt-1">
+                Make sure to run: <code className="bg-yellow-100 px-1 rounded">cd Mental_Health/chatbot && python app.py</code>
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Chat Container */}
       <div className="flex-1 flex flex-col max-w-4xl mx-auto w-full px-4 py-6">
@@ -161,13 +228,17 @@ const Chatbot = () => {
             </div>
             <div>
               <h1 className="text-xl font-bold text-gray-800">AI Mental Health Companion</h1>
-              <p className="text-sm text-gray-600">Your safe space for mental wellness support</p>
+              <p className="text-sm text-gray-600">
+                {isConnected 
+                  ? "Powered by trained mental health AI model" 
+                  : "Waiting for AI connection..."}
+              </p>
             </div>
           </div>
         </div>
 
         {/* Messages Container */}
-        <div className="flex-1 bg-white px-6 py-4 overflow-y-auto space-y-4 max-h-96">
+        <div className="flex-1 bg-white px-6 py-4 overflow-y-auto space-y-4 min-h-96 max-h-96">
           {messages.map((message) => (
             <div
               key={message.id}
@@ -181,9 +252,16 @@ const Chatbot = () => {
                 }`}
               >
                 <p className="text-sm">{message.text}</p>
-                <span className="text-xs opacity-70 mt-1 block">
-                  {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                </span>
+                <div className="flex items-center justify-between mt-1">
+                  <span className="text-xs opacity-70">
+                    {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </span>
+                  {message.isBot && message.intent && (
+                    <span className="text-xs opacity-60 italic ml-2">
+                      ({message.intent})
+                    </span>
+                  )}
+                </div>
               </div>
             </div>
           ))}
@@ -191,7 +269,8 @@ const Chatbot = () => {
           {isTyping && (
             <div className="flex justify-start mb-4">
               <div className="bg-gray-100 text-gray-800 px-4 py-2 rounded-lg">
-                <div className="flex space-x-1">
+                <div className="flex space-x-1 items-center">
+                  <span className="text-xs text-gray-500 mr-2">AI is thinking</span>
                   <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
                   <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
                   <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
@@ -210,7 +289,12 @@ const Chatbot = () => {
               <button
                 key={index}
                 onClick={() => setInputText(response)}
-                className="px-3 py-1 text-xs bg-blue-100 text-blue-700 rounded-full hover:bg-blue-200 transition-colors"
+                disabled={isLoading || !isConnected}
+                className={`px-3 py-1 text-xs rounded-full transition-colors ${
+                  isConnected 
+                    ? 'bg-blue-100 text-blue-700 hover:bg-blue-200' 
+                    : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                }`}
               >
                 {response}
               </button>
@@ -226,14 +310,14 @@ const Chatbot = () => {
               value={inputText}
               onChange={(e) => setInputText(e.target.value)}
               onKeyPress={handleKeyPress}
-              placeholder="Type your message here... Press Enter to send"
-              className="flex-1 resize-none rounded-lg border border-gray-300 px-4 py-2 text-sm focus:border-[var(--pastel-blue)] focus:outline-none focus:ring-2 focus:ring-[var(--pastel-blue)] focus:ring-opacity-50"
+              placeholder={isConnected ? "Type your message here... Press Enter to send" : "Waiting for AI connection..."}
+              className="flex-1 resize-none rounded-lg border border-gray-300 px-4 py-2 text-sm focus:border-[var(--pastel-blue)] focus:outline-none focus:ring-2 focus:ring-[var(--pastel-blue)] focus:ring-opacity-50 disabled:bg-gray-50 disabled:cursor-not-allowed"
               rows={2}
-              disabled={isLoading}
+              disabled={isLoading || !isConnected}
             />
             <button
               onClick={handleSendMessage}
-              disabled={!inputText.trim() || isLoading}
+              disabled={!inputText.trim() || isLoading || !isConnected}
               className="px-6 py-2 bg-[var(--pastel-blue)] text-white rounded-lg hover:bg-[#96b9d8] focus:outline-none focus:ring-2 focus:ring-[var(--pastel-blue)] focus:ring-opacity-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               {isLoading ? (
