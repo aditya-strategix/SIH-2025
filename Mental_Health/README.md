@@ -40,45 +40,6 @@ A comprehensive digital mental health platform designed to support students with
 - Regular wellness check-ins for active participants
 - Clear community guidelines and reporting systems
 
-## 🏗️ Project Structure
-
-```
-```
-Mental_Health/
-├── backend/                # Node.js/Express API (auth, assessments, peer network)
-│   ├── models/             # Mongoose models (User, SupportGroup, PeerMessage, MentorConnection)
-│   ├── routes/             # API route handlers
-│   ├── controllers/        # Business logic
-│   ├── middleware/         # Auth, moderation, error handling
-│   ├── utils/              # Utility functions (encryption, matching)
-│   ├── tests/              # Unit/integration tests
-│   ├── .env.example        # Example environment variables
-│   └── index.js            # API entry point
-├── frontend/               # React 18 + Vite client
-│   ├── src/
-│   │   ├── components/     # Reusable UI components
-│   │   ├── pages/          # Route-based pages (Dashboard, Chatbot, PeerNetwork, etc.)
-│   │   ├── hooks/          # Custom React hooks
-│   │   ├── utils/          # Frontend utilities
-│   │   ├── assets/         # Images, icons, styles
-│   │   └── App.jsx         # Main app component
-│   ├── public/             # Static files
-│   ├── .env.example        # Example frontend env
-│   └── vite.config.js      # Vite config
-├── chatbot/                # Python AI chatbot (Flask + TensorFlow)
-│   ├── intents.json        # Training data
-│   ├── model/              # Saved model files
-│   ├── training.py         # Model training script
-│   ├── app.py              # Flask API server
-│   ├── requirements.txt    # Python dependencies
-│   └── utils.py            # NLP utilities
-|
-├── docs/                   # Additional documentation, diagrams
-├── .gitignore
-├── README.md
-└── LICENSE
-```
-
 ## 🚀 Quick Start
 
 ### Prerequisites
